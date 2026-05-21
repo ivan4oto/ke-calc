@@ -6,7 +6,6 @@ const hoursInput = document.querySelector("#hours");
 const minutesInput = document.querySelector("#minutes");
 const targetTime = document.querySelector("#target-time");
 const rowCount = document.querySelector("#row-count");
-const dataNote = document.querySelector("#data-note");
 const checkpointHead = document.querySelector("#checkpoint-head");
 const checkpointBody = document.querySelector("#checkpoint-body");
 const columnToggleList = document.querySelector("#column-toggle-list");
@@ -21,12 +20,14 @@ const tableColumns = [
   { key: "distanceFromLast", label: "Distance from last", cellClass: "numeric" },
   { key: "timeFromLast", label: "From last", cellClass: "numeric numeric-strong" },
   { key: "paceFromLast", label: "Pace from last", cellClass: "numeric numeric-strong" },
+  { key: "rest", label: "Rest", cellClass: "rest-cell" },
   { key: "elapsed", label: "Elapsed", cellClass: "numeric numeric-strong" },
   { key: "elGain", label: "El gain", cellClass: "numeric" },
   { key: "elLoss", label: "El loss", cellClass: "numeric" }
 ];
 
 const visibleColumns = new Set(tableColumns.map((column) => column.key));
+const restByCheckpoint = new Map();
 
 function parseCsv(text) {
   const rows = [];
@@ -75,6 +76,17 @@ function parseDuration(value) {
   const match = String(value || "").trim().match(/^(\d+):(\d{2}):(\d{2})$/);
   if (!match) return 0;
   return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+}
+
+function parseOptionalDuration(value) {
+  const text = String(value || "").trim();
+  if (!text) return { seconds: 0, valid: true };
+  const match = text.match(/^(\d+):(\d{2}):(\d{2})$/);
+  if (!match) return { seconds: 0, valid: false };
+  return {
+    seconds: Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]),
+    valid: true
+  };
 }
 
 function formatDuration(totalSeconds) {
@@ -165,10 +177,28 @@ function renderHeader(columns) {
 }
 
 function renderCell(column, row) {
-  return `<td class="${column.cellClass || ""}">${row[column.key] ?? ""}</td>`;
+  if (column.key === "rest") {
+    const value = restByCheckpoint.get(row.cpId) || "";
+    const parsed = parseOptionalDuration(value);
+    return `
+      <td class="${column.cellClass || ""}" data-column="${column.key}" data-cp-id="${row.cpId}">
+        <input
+          class="rest-input ${parsed.valid ? "" : "invalid"}"
+          data-cp-id="${row.cpId}"
+          type="text"
+          inputmode="numeric"
+          placeholder="00:00:00"
+          pattern="\\d+:\\d{2}:\\d{2}"
+          value="${value}"
+          aria-label="Rest at ${row.cpName}"
+        >
+      </td>
+    `;
+  }
+  return `<td class="${column.cellClass || ""}" data-column="${column.key}" data-cp-id="${row.cpId}">${row[column.key] ?? ""}</td>`;
 }
 
-function render() {
+function getProjectionRows() {
   const hours = Math.max(0, Number(hoursInput.value || 0));
   const minutes = Math.min(59, Math.max(0, Number(minutesInput.value || 0)));
   minutesInput.value = minutes;
@@ -177,14 +207,50 @@ function render() {
   const sampleTotalSeconds = csvTotalSeconds || SAMPLE_TOTAL_SECONDS;
   const factor = requestedSeconds > 0 ? requestedSeconds / sampleTotalSeconds : 0;
   let elapsed = 0;
+  let previousElapsed = 0;
+  let accumulatedRest = 0;
+
+  return checkpoints.map((checkpoint) => {
+    elapsed = Math.round(checkpoint.baseElapsedSeconds * factor);
+    const fromLast = elapsed - previousElapsed;
+    previousElapsed = elapsed;
+    const rest = parseOptionalDuration(restByCheckpoint.get(checkpoint.cpId));
+    if (rest.valid) {
+      accumulatedRest += rest.seconds;
+    }
+    const segmentDistance = cleanNumber(checkpoint.distanceFromLast);
+    return {
+      cpId: checkpoint.cpId,
+      cpName: checkpoint.cpName,
+      cpKm: formatNumber(checkpoint.cpKm),
+      distanceFromLast: formatNumber(checkpoint.distanceFromLast),
+      timeFromLast: formatDuration(fromLast),
+      paceFromLast: formatPace(fromLast, segmentDistance),
+      elapsed: formatDuration(elapsed + accumulatedRest),
+      elGain: checkpoint.elGain,
+      elLoss: checkpoint.elLoss
+    };
+  });
+}
+
+function updateElapsedCells() {
+  for (const row of getProjectionRows()) {
+    const elapsedCell = checkpointBody.querySelector(`td[data-column="elapsed"][data-cp-id="${CSS.escape(row.cpId)}"]`);
+    if (elapsedCell) {
+      elapsedCell.textContent = row.elapsed;
+    }
+  }
+}
+
+function render() {
+  const hours = Math.max(0, Number(hoursInput.value || 0));
+  const minutes = Math.min(59, Math.max(0, Number(minutesInput.value || 0)));
+  minutesInput.value = minutes;
+  const requestedSeconds = Math.round(hours) * 3600 + Math.round(minutes) * 60;
 
   targetTime.textContent = formatTarget(requestedSeconds);
   rowCount.textContent = `${checkpoints.length} checkpoints`;
-  dataNote.textContent = csvTotalSeconds === SAMPLE_TOTAL_SECONDS
-    ? ""
-    : ` Note: ${CHECKPOINTS_FILE} adds up to ${formatDuration(csvTotalSeconds)}.`;
 
-  let previousElapsed = 0;
   const columns = getVisibleTableColumns();
   renderHeader(columns);
 
@@ -193,26 +259,10 @@ function render() {
     return;
   }
 
-  checkpointBody.innerHTML = checkpoints
-    .map((checkpoint) => {
-      elapsed = Math.round(checkpoint.baseElapsedSeconds * factor);
-      const fromLast = elapsed - previousElapsed;
-      previousElapsed = elapsed;
-      const segmentDistance = cleanNumber(checkpoint.distanceFromLast);
-      const row = {
-        cpId: checkpoint.cpId,
-        cpName: checkpoint.cpName,
-        cpKm: formatNumber(checkpoint.cpKm),
-        distanceFromLast: formatNumber(checkpoint.distanceFromLast),
-        timeFromLast: formatDuration(fromLast),
-        paceFromLast: formatPace(fromLast, segmentDistance),
-        elapsed: formatDuration(elapsed),
-        elGain: checkpoint.elGain,
-        elLoss: checkpoint.elLoss
-      };
-
+  checkpointBody.innerHTML = getProjectionRows()
+    .map((row) => {
       return `
-        <tr>
+        <tr data-cp-id="${row.cpId}">
           ${columns.map((column) => renderCell(column, row)).join("")}
         </tr>
       `;
@@ -237,6 +287,19 @@ columnToggleList.addEventListener("change", (event) => {
     visibleColumns.delete(event.target.value);
   }
   render();
+});
+
+checkpointBody.addEventListener("input", (event) => {
+  if (!event.target.classList.contains("rest-input")) return;
+  restByCheckpoint.set(event.target.dataset.cpId, event.target.value.trim());
+  event.target.classList.toggle("invalid", !parseOptionalDuration(event.target.value).valid);
+  updateElapsedCells();
+});
+
+checkpointBody.addEventListener("change", (event) => {
+  if (!event.target.classList.contains("rest-input")) return;
+  restByCheckpoint.set(event.target.dataset.cpId, event.target.value.trim());
+  updateElapsedCells();
 });
 
 renderColumnToggles();
