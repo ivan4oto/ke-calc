@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Checkpoint Pace Planner</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="control-panel" aria-labelledby="app-title">
+        <div class="title-block">
+          <p class="kicker">Kom-Emine checkpoint model</p>
+          <h1 id="app-title">Finish Time Planner</h1>
+          <p class="lede">
+            Enter a target finish time. The table recalculates each checkpoint split from the
+            84:39 sample profile and keeps checkpoints ordered by route distance.
+          </p>
+        </div>
+
+        <form class="time-form" id="time-form">
+          <label class="field">
+            <span>Hours</span>
+            <input id="hours" name="hours" type="number" min="0" step="1" value="84" inputmode="numeric">
+          </label>
+          <label class="field">
+            <span>Minutes</span>
+            <input id="minutes" name="minutes" type="number" min="0" max="59" step="1" value="39" inputmode="numeric">
+          </label>
+          <button type="submit">Calculate</button>
+        </form>
+
+        <div class="metrics" aria-live="polite">
+          <div>
+            <span class="metric-label">Target</span>
+            <strong id="target-time">84:39</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="table-section" aria-labelledby="table-title">
+        <div class="table-head">
+          <div>
+            <p class="kicker">Projected schedule</p>
+            <h2 id="table-title">Checkpoint Times</h2>
+          </div>
+          <p><span id="row-count">Loading checkpoints...</span><span id="data-note"></span></p>
+        </div>
+
+        <fieldset class="column-controls" aria-label="Visible table columns">
+          <legend>Visible columns</legend>
+          <div id="column-toggle-list" class="toggle-list"></div>
+        </fieldset>
+
+        <div class="table-wrap">
+          <table>
+            <thead id="checkpoint-head">
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Checkpoint</th>
+                <th scope="col">Km</th>
+                <th scope="col">From last</th>
+                <th scope="col">Elapsed</th>
+              </tr>
+            </thead>
+            <tbody id="checkpoint-body">
+              <tr>
+                <td colspan="5" class="state-cell">Loading CSV data...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
