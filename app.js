@@ -28,7 +28,7 @@ const tableColumns = [
   { key: "elLoss", label: "El loss", cellClass: "numeric" }
 ];
 
-const visibleColumns = new Set(tableColumns.map((column) => column.key));
+const visibleColumns = new Set(["cpId", "cpName", "cpKm", "rest", "elapsed"]);
 const restByCheckpoint = new Map();
 
 function parseCsv(text) {
