@@ -4,6 +4,7 @@ const CHECKPOINTS_FILE = "checkpoint_test1_elapsed.csv";
 const form = document.querySelector("#time-form");
 const hoursInput = document.querySelector("#hours");
 const minutesInput = document.querySelector("#minutes");
+const startTimeInput = document.querySelector("#start-time");
 const targetTime = document.querySelector("#target-time");
 const rowCount = document.querySelector("#row-count");
 const checkpointHead = document.querySelector("#checkpoint-head");
@@ -18,10 +19,11 @@ const tableColumns = [
   { key: "cpName", label: "Checkpoint", cellClass: "checkpoint-name" },
   { key: "cpKm", label: "Km", cellClass: "numeric" },
   { key: "distanceFromLast", label: "Distance from last", cellClass: "numeric" },
-  { key: "timeFromLast", label: "From last", cellClass: "numeric numeric-strong" },
+  { key: "timeFromLast", label: "Time from last", cellClass: "numeric numeric-strong" },
   { key: "paceFromLast", label: "Pace from last", cellClass: "numeric numeric-strong" },
   { key: "rest", label: "Rest", cellClass: "rest-cell" },
   { key: "elapsed", label: "Elapsed", cellClass: "numeric numeric-strong" },
+  { key: "currentTime", label: "Current time", cellClass: "numeric numeric-strong" },
   { key: "elGain", label: "El gain", cellClass: "numeric" },
   { key: "elLoss", label: "El loss", cellClass: "numeric" }
 ];
@@ -89,8 +91,23 @@ function parseOptionalDuration(value) {
   };
 }
 
+function parseClockTime(value) {
+  const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return 0;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3] || 0);
+}
+
 function formatDuration(totalSeconds) {
   const seconds = Math.max(0, Math.round(totalSeconds));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+}
+
+function formatClockTime(totalSeconds) {
+  const daySeconds = 24 * 3600;
+  const seconds = ((Math.round(totalSeconds) % daySeconds) + daySeconds) % daySeconds;
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const remainder = seconds % 60;
@@ -206,6 +223,7 @@ function getProjectionRows() {
   const requestedSeconds = Math.round(hours) * 3600 + Math.round(minutes) * 60;
   const sampleTotalSeconds = csvTotalSeconds || SAMPLE_TOTAL_SECONDS;
   const factor = requestedSeconds > 0 ? requestedSeconds / sampleTotalSeconds : 0;
+  const startSeconds = parseClockTime(startTimeInput.value);
   let elapsed = 0;
   let previousElapsed = 0;
   let accumulatedRest = 0;
@@ -219,6 +237,7 @@ function getProjectionRows() {
       accumulatedRest += rest.seconds;
     }
     const segmentDistance = cleanNumber(checkpoint.distanceFromLast);
+    const elapsedWithRest = elapsed + accumulatedRest;
     return {
       cpId: checkpoint.cpId,
       cpName: checkpoint.cpName,
@@ -226,7 +245,8 @@ function getProjectionRows() {
       distanceFromLast: formatNumber(checkpoint.distanceFromLast),
       timeFromLast: formatDuration(fromLast),
       paceFromLast: formatPace(fromLast, segmentDistance),
-      elapsed: formatDuration(elapsed + accumulatedRest),
+      elapsed: formatDuration(elapsedWithRest),
+      currentTime: formatClockTime(startSeconds + elapsedWithRest),
       elGain: checkpoint.elGain,
       elLoss: checkpoint.elLoss
     };
@@ -238,6 +258,10 @@ function updateElapsedCells() {
     const elapsedCell = checkpointBody.querySelector(`td[data-column="elapsed"][data-cp-id="${CSS.escape(row.cpId)}"]`);
     if (elapsedCell) {
       elapsedCell.textContent = row.elapsed;
+    }
+    const currentTimeCell = checkpointBody.querySelector(`td[data-column="currentTime"][data-cp-id="${CSS.escape(row.cpId)}"]`);
+    if (currentTimeCell) {
+      currentTimeCell.textContent = row.currentTime;
     }
   }
 }
@@ -278,6 +302,9 @@ form.addEventListener("submit", (event) => {
 for (const input of [hoursInput, minutesInput]) {
   input.addEventListener("input", render);
 }
+
+startTimeInput.addEventListener("input", updateElapsedCells);
+startTimeInput.addEventListener("change", updateElapsedCells);
 
 columnToggleList.addEventListener("change", (event) => {
   if (event.target.type !== "checkbox") return;

@@ -27,6 +27,10 @@
             <span>Minutes</span>
             <input id="minutes" name="minutes" type="number" min="0" max="59" step="1" value="39" inputmode="numeric">
           </label>
+          <label class="field">
+            <span>Start time</span>
+            <input id="start-time" name="start-time" type="time" step="1" value="07:30:00">
+          </label>
           <button type="submit">Calculate</button>
         </form>
 
@@ -59,7 +63,7 @@
                 <th scope="col">#</th>
                 <th scope="col">Checkpoint</th>
                 <th scope="col">Km</th>
-                <th scope="col">From last</th>
+                <th scope="col">Time from last</th>
                 <th scope="col">Elapsed</th>
               </tr>
             </thead>
